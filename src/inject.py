@@ -48,20 +48,25 @@ def raiseP():
     old_privs = win32security.AdjustTokenPrivileges (hToken, 0, [(privilege_id, win32security.SE_PRIVILEGE_ENABLED | win32security.SE_PRIVILEGE_USED_FOR_ACCESS )])
     #print "old_priv = %s" %( old_privs)
     #query()
+    print "raise privilege error code = %d" %  (win32api.GetLastError())
 
 def getProcByName(procName):
     
     pidList = win32process.EnumProcesses()
     #print pidList
+
     raiseP()
+    
     for pid in pidList:
         try:
             #print pid
+            win32api.SetLastError(0)
             hProcess = win32api.OpenProcess(
                                             win32con.PROCESS_QUERY_INFORMATION | win32con.PROCESS_VM_READ
                                              | win32con.PROCESS_CREATE_THREAD | win32con.PROCESS_VM_OPERATION 
                                              | win32con.PROCESS_VM_WRITE
                                             , False, pid)
+            #print "error code = %d" %  (win32api.GetLastError())
             #print "open process pid = %d" % (pid)
             hProcessFirstModule = win32process.EnumProcessModules(hProcess)[0]
             fullname = os.path.split(win32process.GetModuleFileNameEx(hProcess, hProcessFirstModule))
@@ -71,12 +76,16 @@ def getProcByName(procName):
             
             if(not procName.isalpha()):
                 #print unicode(procName.decode("gbk"))
+                #print processName
                 procName = unicode(procName.decode("gbk"))
+                
                 #print unicode(processName)
                 processName = unicode(processName)
+                
                 if(procName == processName):
                     return hProcess
-            else:    
+            else:
+                #print processName 
                 if( procName.lower() == processName.lower()):
                     return hProcess
             win32api.CloseHandle(hProcess)
@@ -105,29 +114,40 @@ def inject(proc, dllName):
     ret = WriteProcessMemory(proc.handle, buf, dllName, size, byref(written))
     
     if(written.value != size or ret == 0):
-        VirtualFreeEx(proc.handle, buf, size, win32con.MEM_COMMIT)
+        VirtualFreeEx(proc.handle, buf, 0, win32con.MEM_RELEASE)
         Clean(proc)
         print "WriteProcessMemory Fails"
         return
     
     module = win32api.GetModuleHandle("kernel32")
     if(module == 0):
-        VirtualFreeEx(proc.handle, buf, size, win32con.MEM_COMMIT)
+        VirtualFreeEx(proc.handle, buf, 0, win32con.MEM_RELEASE)
         Clean(proc)
         print "GetModuleHandle Fails"
         return
     
     addr = win32api.GetProcAddress(module, "LoadLibraryA")
     if(addr == 0):
-        VirtualFreeEx(proc.handle, buf, size, win32con.MEM_COMMIT)
+        VirtualFreeEx(proc.handle, buf, 0, win32con.MEM_RELEASE)
         Clean(proc)
         print "GetProcAddress Fails"
         return
     
     tHandle, tid = win32process.CreateRemoteThread(proc.handle, None, 0, addr, buf, 0)
     print "Success! ThreadHandle, ThreadID = %d,%d" %( tHandle, tid)
-    #print win32api.GetLastError()
     
+    print "wait for single object return = %d" % (win32event.WaitForSingleObject(tHandle, win32event.INFINITE))
+    
+    print "return code = %d" % (win32process.GetExitCodeThread(tHandle))
+    print "error code = %d, %s" %  (win32api.GetLastError(), win32api.FormatMessage(win32api.GetLastError()))
+    
+    
+    
+    ret = VirtualFreeEx(proc.handle, buf, 0, win32con.MEM_RELEASE)
+    if(ret == 0):
+        print "Free fails"
+    win32api.CloseHandle(tHandle)
+    print "Cleaned"
     
 
 
