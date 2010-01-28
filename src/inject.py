@@ -48,7 +48,7 @@ def raiseP():
     old_privs = win32security.AdjustTokenPrivileges (hToken, 0, [(privilege_id, win32security.SE_PRIVILEGE_ENABLED | win32security.SE_PRIVILEGE_USED_FOR_ACCESS )])
     #print "old_priv = %s" %( old_privs)
     #query()
-    print "raise privilege error code = %d" %  (win32api.GetLastError())
+    #print "raise privilege error code = %d" %  (win32api.GetLastError())
 
 def getProcByName(procName):
     
@@ -175,11 +175,20 @@ def main(argv=sys.argv):
         print "LoadLibrary %s = %d" %(dllName, kernel32.LoadLibraryA(dllName))
         
     if(optdict.has_key('-p')):
-        procName = optdict['-p']
-        hProc = getProcByName(procName)
-        if(hProc == None):
-            print "Can't find the process named %s" % (procName)
-            return
+        try:
+            value = int(optdict['-p'])
+            try:
+                hProc = win32api.OpenProcess(win32con.PROCESS_ALL_ACCESS, 0, value)
+            except pywintypes.error:
+                print "Can't find the process whose pid = %d" % (value)
+                return
+        except ValueError:
+            procName = optdict['-p']
+            hProc = getProcByName(procName)
+            if(hProc == None):
+                print "Can't find the process named %s" % (procName)
+                return
+        
     
     try:
         if(optdict.has_key('-i')):
